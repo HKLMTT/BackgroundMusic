@@ -93,6 +93,14 @@ public:
     void                SetOutputVolumeCallback(std::function<void(Float32)> inCallback)
                             { mOutputVolumeCallback = std::move(inCallback); }
 
+    /*!
+     Set a callback used to apply BGMDevice's mute in software when the output device has no
+     hardware mute control of its own. The callback is passed true to mute, false to unmute. Pass
+     nullptr to disable software mute.
+     */
+    void                SetOutputMuteCallback(std::function<void(bool)> inCallback)
+                            { mOutputMuteCallback = std::move(inCallback); }
+
 #pragma mark Accessors
 
     /*!
@@ -128,6 +136,10 @@ private:
     // Called to apply BGMDevice's volume in software when the output device has no volume control.
     // See SetOutputVolumeCallback.
     std::function<void(Float32)> mOutputVolumeCallback;
+
+    // Called to apply BGMDevice's mute in software when the output device has no mute control.
+    // See SetOutputMuteCallback.
+    std::function<void(bool)> mOutputMuteCallback;
 
 };
 

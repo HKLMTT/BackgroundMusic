@@ -998,8 +998,12 @@ OSStatus    BGMPlayThrough::OutputDeviceIOProc(AudioObjectID           inDevice,
             // Apply the software output volume. This is unity (1.0) for output devices that have
             // their own (hardware) volume control, so this loop is a no-op for them. For devices
             // without a volume control (e.g. HDMI/DisplayPort displays) BGMApp sets the gain here
-            // instead. Realtime safe: an atomic load plus a multiply, no locks or allocation.
-            const Float32 gain = refCon->mOutputVolume.load(std::memory_order_relaxed);
+            // instead. Software mute (also used only for devices without a hardware mute control)
+            // simply forces the gain to zero. Realtime safe: atomic loads plus a multiply, no locks
+            // or allocation.
+            const bool muted = refCon->mOutputMuted.load(std::memory_order_relaxed);
+            const Float32 gain =
+                muted ? 0.0f : refCon->mOutputVolume.load(std::memory_order_relaxed);
 
             if(gain < 1.0f)
             {

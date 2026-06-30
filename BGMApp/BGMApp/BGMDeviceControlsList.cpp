@@ -223,8 +223,9 @@ bool    BGMDeviceControlsList::MatchControlsListOf(AudioObjectID inDeviceID)
     // Keep BGMDevice's volume control enabled even when the output device has none (e.g. a display
     // connected over HDMI/DisplayPort). That way the volume slider and the keyboard volume keys stay
     // active; BGMApp applies the volume in software in that case (see BGMPlayThrough::SetOutputVolume
-    // and BGMDeviceControlSync's volume listener).
+    // and BGMDeviceControlSync's volume listener). Likewise for mute, so the mute key keeps working.
     hasVolume = true;
+    hasMute = true;
 
     // Update volume.
     if(volumeEnabled != hasVolume)

@@ -138,6 +138,13 @@ public:
                             mOutputVolume.store(v, std::memory_order_relaxed);
                         }
 
+    // Software mute, used alongside SetOutputVolume for output devices without a hardware mute
+    // control. Realtime safe to read; safe to call from any thread to set.
+    void                SetOutputMuted(bool inMuted) noexcept
+                        {
+                            mOutputMuted.store(inMuted, std::memory_order_relaxed);
+                        }
+
 private:
     
     static bool         IsRunningSomewhereOtherThanBGMApp(const BGMAudioDevice& inBGMDevice);
@@ -237,6 +244,9 @@ private:
 
     // See SetOutputVolume. Read by OutputDeviceIOProc on the realtime thread.
     std::atomic<Float32> mOutputVolume { 1.0f };
+
+    // See SetOutputMuted. Read by OutputDeviceIOProc on the realtime thread.
+    std::atomic<bool>   mOutputMuted { false };
 
     BGMPlayThroughRTLogger mRTLogger;
 

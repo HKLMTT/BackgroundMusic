@@ -248,7 +248,33 @@ OSStatus    BGMDeviceControlSync::BGMDeviceListenerProc(AudioObjectID inObjectID
                     // change the volume (on BGMDevice).
                     if(checkState())
                     {
-                        refCon->mOutputDevice.CopyMuteFrom(refCon->mBGMDevice, scope);
+                        // As with volume above: if the output device has its own (hardware) mute
+                        // control, mirror BGMDevice's mute onto it. Otherwise have BGMApp apply the
+                        // mute in software via the callback.
+                        bool outputHasHardwareMute = false;
+
+                        BGMLogAndSwallowExceptions(
+                            "BGMDeviceControlSync::BGMDeviceListenerProc", [&] {
+                                outputHasHardwareMute =
+                                    refCon->mOutputDevice.HasSettableMainMute(scope);
+                            });
+
+                        if(outputHasHardwareMute)
+                        {
+                            refCon->mOutputDevice.CopyMuteFrom(refCon->mBGMDevice, scope);
+                        }
+                        else if(refCon->mOutputMuteCallback)
+                        {
+                            bool muted = false;
+
+                            BGMLogAndSwallowExceptions(
+                                "BGMDeviceControlSync::BGMDeviceListenerProc", [&] {
+                                    muted = refCon->mBGMDevice.GetMuteControlValue(
+                                        scope, kMainChannel);
+                                });
+
+                            refCon->mOutputMuteCallback(muted);
+                        }
                     }
                 }
                 break;

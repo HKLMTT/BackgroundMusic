@@ -327,13 +327,16 @@ static OSStatus BGMDeviceListenerProc(AudioObjectID inObjectID,
     deviceControlSync.SetOutputVolumeCallback([pt](Float32 inVolume) {
         pt->SetOutputVolume(inVolume);
     });
+    deviceControlSync.SetOutputMuteCallback([pt](bool inMuted) {
+        pt->SetOutputMuted(inMuted);
+    });
 
     deviceControlSync.SetDevices(*bgmDevice, newOutputDevice);
     deviceControlSync.Activate();
 
-    // Initialise the software volume for the new output device. Use unity gain when the device has
-    // its own volume control (so we don't attenuate twice), otherwise seed it with BGMDevice's
-    // current volume.
+    // Initialise the software volume and mute for the new output device. Use unity gain / unmuted
+    // when the device has its own controls (so we don't attenuate twice), otherwise seed them with
+    // BGMDevice's current values.
     BGMLogAndSwallowExceptions("BGMAudioDeviceManager::setOutputDeviceForPlaythroughAndControlSync",
                                [&] {
         if(newOutputDevice.HasSettableMainVolume(kAudioObjectPropertyScopeOutput))
@@ -345,6 +348,16 @@ static OSStatus BGMDeviceListenerProc(AudioObjectID inObjectID,
             playThrough.SetOutputVolume(
                 bgmDevice->GetVolumeControlScalarValue(kAudioObjectPropertyScopeOutput,
                                                        kMainChannel));
+        }
+
+        if(newOutputDevice.HasSettableMainMute(kAudioObjectPropertyScopeOutput))
+        {
+            playThrough.SetOutputMuted(false);
+        }
+        else
+        {
+            playThrough.SetOutputMuted(
+                bgmDevice->GetMuteControlValue(kAudioObjectPropertyScopeOutput, kMainChannel));
         }
     });
 
