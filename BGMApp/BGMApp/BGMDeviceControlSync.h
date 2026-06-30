@@ -44,6 +44,10 @@
 // System Includes
 #include <AudioToolbox/AudioServices.h>
 
+// STL Includes
+#include <functional>
+#include <utility>
+
 
 #pragma clang assume_nonnull begin
 
@@ -81,6 +85,14 @@ public:
     /*! Stop synchronising BGMDevice's controls with the output device's. */
     void                Deactivate();
 
+    /*!
+     Set a callback used to apply BGMDevice's volume in software when the output device has no
+     hardware volume control of its own (e.g. an HDMI/DisplayPort display). The callback is passed
+     the new volume as a scalar (0.0 to 1.0). Pass nullptr to disable software volume.
+     */
+    void                SetOutputVolumeCallback(std::function<void(Float32)> inCallback)
+                            { mOutputVolumeCallback = std::move(inCallback); }
+
 #pragma mark Accessors
 
     /*!
@@ -112,7 +124,11 @@ private:
     BGMAudioDevice      mOutputDevice  { (AudioObjectID)kAudioObjectUnknown };
 
     BGMDeviceControlsList mBGMDeviceControlsList;
-    
+
+    // Called to apply BGMDevice's volume in software when the output device has no volume control.
+    // See SetOutputVolumeCallback.
+    std::function<void(Float32)> mOutputVolumeCallback;
+
 };
 
 #pragma clang assume_nonnull end

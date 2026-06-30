@@ -126,7 +126,18 @@ private:
 public:
     OSStatus            Stop();
     void                StopIfIdle();
-    
+
+    // Software output volume applied in OutputDeviceIOProc. Used when the output device (e.g. a
+    // display connected over HDMI/DisplayPort) has no hardware volume control, so the volume slider
+    // and the keyboard volume keys still work. 1.0 == unity gain (no change). Realtime safe to read;
+    // safe to call from any thread to set.
+    void                SetOutputVolume(Float32 inVolume) noexcept
+                        {
+                            Float32 v = inVolume < 0.0f ? 0.0f
+                                      : (inVolume > 1.0f ? 1.0f : inVolume);
+                            mOutputVolume.store(v, std::memory_order_relaxed);
+                        }
+
 private:
     
     static bool         IsRunningSomewhereOtherThanBGMApp(const BGMAudioDevice& inBGMDevice);
@@ -223,6 +234,9 @@ private:
     
     // Subtract this from the output time to get the input time.
     Float64             mInToOutSampleOffset { 0.0 };
+
+    // See SetOutputVolume. Read by OutputDeviceIOProc on the realtime thread.
+    std::atomic<Float32> mOutputVolume { 1.0f };
 
     BGMPlayThroughRTLogger mRTLogger;
 

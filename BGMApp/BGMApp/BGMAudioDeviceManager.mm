@@ -321,8 +321,32 @@ static OSStatus BGMDeviceListenerProc(AudioObjectID inObjectID,
     playThrough.Deactivate();
     playThrough_UISounds.Deactivate();
 
+    // When the output device has no hardware volume control (e.g. HDMI/DisplayPort), apply
+    // BGMDevice's volume in software in the (main) playthrough instead.
+    BGMPlayThrough* pt = &playThrough;
+    deviceControlSync.SetOutputVolumeCallback([pt](Float32 inVolume) {
+        pt->SetOutputVolume(inVolume);
+    });
+
     deviceControlSync.SetDevices(*bgmDevice, newOutputDevice);
     deviceControlSync.Activate();
+
+    // Initialise the software volume for the new output device. Use unity gain when the device has
+    // its own volume control (so we don't attenuate twice), otherwise seed it with BGMDevice's
+    // current volume.
+    BGMLogAndSwallowExceptions("BGMAudioDeviceManager::setOutputDeviceForPlaythroughAndControlSync",
+                               [&] {
+        if(newOutputDevice.HasSettableMainVolume(kAudioObjectPropertyScopeOutput))
+        {
+            playThrough.SetOutputVolume(1.0f);
+        }
+        else
+        {
+            playThrough.SetOutputVolume(
+                bgmDevice->GetVolumeControlScalarValue(kAudioObjectPropertyScopeOutput,
+                                                       kMainChannel));
+        }
+    });
 
     // Stream audio from BGMDevice to the new output device. This blocks while the old device stops
     // IO.

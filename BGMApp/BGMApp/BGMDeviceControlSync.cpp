@@ -207,10 +207,35 @@ OSStatus    BGMDeviceControlSync::BGMDeviceListenerProc(AudioObjectID inObjectID
                 {
                     CAMutex::Locker locker(refCon->mMutex);
 
-                    // Update the output device's volume.
                     if(checkState())
                     {
-                        refCon->mOutputDevice.CopyVolumeFrom(refCon->mBGMDevice, scope);
+                        // If the output device has its own (hardware) volume control, mirror
+                        // BGMDevice's volume onto it as usual. Otherwise (e.g. an HDMI/DisplayPort
+                        // display) have BGMApp apply the volume in software via the callback.
+                        bool outputHasHardwareVolume = false;
+
+                        BGMLogAndSwallowExceptions(
+                            "BGMDeviceControlSync::BGMDeviceListenerProc", [&] {
+                                outputHasHardwareVolume =
+                                    refCon->mOutputDevice.HasSettableMainVolume(scope);
+                            });
+
+                        if(outputHasHardwareVolume)
+                        {
+                            refCon->mOutputDevice.CopyVolumeFrom(refCon->mBGMDevice, scope);
+                        }
+                        else if(refCon->mOutputVolumeCallback)
+                        {
+                            Float32 volume = 1.0f;
+
+                            BGMLogAndSwallowExceptions(
+                                "BGMDeviceControlSync::BGMDeviceListenerProc", [&] {
+                                    volume = refCon->mBGMDevice.GetVolumeControlScalarValue(
+                                        scope, kMainChannel);
+                                });
+
+                            refCon->mOutputVolumeCallback(volume);
+                        }
                     }
                 }
                 break;
