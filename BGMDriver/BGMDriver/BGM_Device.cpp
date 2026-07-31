@@ -461,7 +461,7 @@ UInt32	BGM_Device::Device_GetPropertyDataSize(AudioObjectID inObjectID, pid_t in
             break;
             
         case kAudioObjectPropertyCustomPropertyInfoList:
-            theAnswer = sizeof(AudioServerPlugInCustomPropertyInfo) * 7;
+            theAnswer = sizeof(AudioServerPlugInCustomPropertyInfo) * 8;
             break;
             
         case kAudioDeviceCustomPropertyDeviceAudibleState:
