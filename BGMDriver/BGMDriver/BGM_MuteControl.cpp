@@ -31,6 +31,9 @@
 #include "CAException.h"
 #include "CADispatchQueue.h"
 
+// STL Includes
+#include <cstring>
+
 
 #pragma clang assume_nonnull begin
 
@@ -48,8 +51,20 @@ BGM_MuteControl::BGM_MuteControl(AudioObjectID inObjectID,
                 inScope,
                 inElement),
     mMutex("Mute Control"),
-    mMuted(false)
+    mMuted(false),
+    mWillApplyMuteToAudio(false)
 {
+}
+
+#pragma mark IO Operations
+
+void    BGM_MuteControl::ApplyMuteToAudioRT(Float32* ioBuffer, UInt32 inBufferFrameSize) const
+{
+    if(mWillApplyMuteToAudio && mMuted)
+    {
+        // The audio is stereo interleaved, i.e. two samples per frame.
+        memset(ioBuffer, 0, inBufferFrameSize * 2 * sizeof(Float32));
+    }
 }
 
 #pragma mark Property Operations

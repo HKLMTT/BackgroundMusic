@@ -1323,14 +1323,17 @@ void	BGM_Device::Device_SetPropertyData(AudioObjectID inObjectID, pid_t inClient
 
                 bool theApplyVolume = CFBooleanGetValue(theApplyVolumeRef);
 
-                // mWillApplyVolumeToAudio is atomic because it's read on the IO threads, so there's
-                // nothing to lock around here.
+                // The flags are atomic because they're read on the IO threads, so there's nothing
+                // to lock around here.
                 bool propertyWasChanged =
-                    (mVolumeControl.WillApplyVolumeToAudioRT() != theApplyVolume);
+                    (mVolumeControl.WillApplyVolumeToAudioRT() != theApplyVolume)
+                        || (mMuteControl.WillApplyMuteToAudioRT() != theApplyVolume);
 
                 mVolumeControl.SetWillApplyVolumeToAudio(theApplyVolume);
+                mMuteControl.SetWillApplyMuteToAudio(theApplyVolume);
 
-                DebugMsg("BGM_Device::Device_SetPropertyData: %s applying volume to audio data",
+                DebugMsg("BGM_Device::Device_SetPropertyData: %s applying volume/mute to audio "
+                         "data",
                          theApplyVolume ? "Started" : "Stopped");
 
                 if(propertyWasChanged)
@@ -1476,7 +1479,8 @@ void	BGM_Device::WillDoIOOperation(UInt32 inOperationID, bool& outWillDo, bool& 
 			break;
 
         case kAudioServerPlugInIOOperationProcessMix:
-            outWillDo = mVolumeControl.WillApplyVolumeToAudioRT();
+            outWillDo = mVolumeControl.WillApplyVolumeToAudioRT()
+                            || mMuteControl.WillApplyMuteToAudioRT();
             outWillDoInPlace = true;
             break;
 
@@ -1559,10 +1563,19 @@ void	BGM_Device::DoIOOperation(AudioObjectID inStreamObjectID, UInt32 inClientID
 
                 CAMutex::Locker theIOLocker(mIOMutex);
 
-                // We ask to do this IO operation so this device can apply its own volume to the
-                // stream. Currently, only the UI sounds device does.
-                mVolumeControl.ApplyVolumeToAudioRT(reinterpret_cast<Float32*>(ioMainBuffer),
-                                                    inIOBufferFrameSize);
+                // We ask to do this IO operation so this device can apply its own volume and mute
+                // to the stream. Upstream, only the UI sounds device applies its volume. The main
+                // device does too when the real output device has no controls of its own for
+                // BGMApp to copy the values to (e.g. HDMI/DisplayPort displays). See
+                // kAudioDeviceCustomPropertyApplyVolumeToAudio.
+                if(mVolumeControl.WillApplyVolumeToAudioRT())
+                {
+                    mVolumeControl.ApplyVolumeToAudioRT(reinterpret_cast<Float32*>(ioMainBuffer),
+                                                        inIOBufferFrameSize);
+                }
+
+                mMuteControl.ApplyMuteToAudioRT(reinterpret_cast<Float32*>(ioMainBuffer),
+                                                inIOBufferFrameSize);
             }
             break;
 

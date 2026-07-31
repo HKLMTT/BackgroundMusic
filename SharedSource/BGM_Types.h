@@ -124,9 +124,9 @@ enum
     kAudioDeviceCustomPropertyEnabledOutputControls                   = 'bgct',
     // A CFBoolean. True if debug logging is enabled in BGMDriver. Settable.
     kAudioDeviceCustomPropertyDebugLoggingEnabled                     = 'dblg',
-    // A CFBoolean. True if BGMDevice should apply its main output volume to the audio data itself,
-    // for output devices that have no volume controls of their own (e.g. HDMI/DisplayPort
-    // displays). Settable, false by default.
+    // A CFBoolean. True if BGMDevice should apply its main output volume and mute to the audio
+    // data itself, for output devices that have no volume/mute controls of their own (e.g.
+    // HDMI/DisplayPort displays). Settable, false by default.
     kAudioDeviceCustomPropertyApplyVolumeToAudio                      = 'apva'
 };
 

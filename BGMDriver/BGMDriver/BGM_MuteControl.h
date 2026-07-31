@@ -29,6 +29,9 @@
 // PublicUtility Includes
 #include "CAMutex.h"
 
+// STL Includes
+#include <atomic>
+
 // System Includes
 #include <MacTypes.h>
 #include <CoreAudio/CoreAudio.h>
@@ -84,11 +87,35 @@ public:
                                               UInt32 inDataSize,
                                               const void* inData);
 
+#pragma mark IO Operations
+
+public:
+    /*!
+     Set whether this control should apply its mute to the device's audio data itself, i.e. whether
+     clients should use ApplyMuteToAudioRT while doing IO. Used when the real output device has no
+     mute control of its own for BGMApp to copy the mute state to (e.g. HDMI/DisplayPort displays).
+     */
+    void                      SetWillApplyMuteToAudio(bool inWillApplyMuteToAudio)
+                                  { mWillApplyMuteToAudio = inWillApplyMuteToAudio; }
+
+    /*! @return True if clients should use ApplyMuteToAudioRT while doing IO. */
+    bool                      WillApplyMuteToAudioRT() const { return mWillApplyMuteToAudio; }
+
+    /*!
+     Silence the samples in ioBuffer if this control is currently muted. Realtime safe. Does nothing
+     unless SetWillApplyMuteToAudio has been used to enable applying the mute to audio data.
+     */
+    void                      ApplyMuteToAudioRT(Float32* ioBuffer,
+                                                 UInt32 inBufferFrameSize) const;
+
 #pragma mark Implementation
 
 private:
     CAMutex                   mMutex;
-    bool                      mMuted;
+    // Atomic because it's read on the realtime IO threads by ApplyMuteToAudioRT.
+    std::atomic<bool>         mMuted;
+    // Set from non-realtime threads and read on the realtime IO threads, so it has to be atomic.
+    std::atomic<bool>         mWillApplyMuteToAudio;
 
 };
 

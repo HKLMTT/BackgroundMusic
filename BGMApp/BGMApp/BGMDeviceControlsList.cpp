@@ -184,9 +184,11 @@ bool    BGMDeviceControlsList::MatchControlsListOf(AudioObjectID inDeviceID)
              (volumeEnabled ? "enabled" : "disabled"),
              (muteEnabled ? "enabled" : "disabled"));
 
-    // Check which controls the other device has.
+    // Check which controls the other device has. (Its mute control doesn't matter here any more:
+    // BGMDevice's mute control stays enabled either way and, when
+    // kAudioDeviceCustomPropertyApplyVolumeToAudio is set, BGMDriver applies the mute to the audio
+    // data itself.)
     BGMAudioDevice device(inDeviceID);
-    bool hasMute = device.HasSettableMainMute(inScope);
 
     bool hasVolume =
         device.HasSettableMainVolume(inScope) || device.HasSettableVirtualMainVolume(inScope);
@@ -235,12 +237,15 @@ bool    BGMDeviceControlsList::MatchControlsListOf(AudioObjectID inDeviceID)
     }
 
     // Update mute.
-    if(muteEnabled != hasMute)
+    //
+    // As with volume above, the mute control always stays enabled so the mute key keeps working.
+    // When the output device has no mute control of its own, BGMDriver silences the audio data
+    // itself (also controlled by kAudioDeviceCustomPropertyApplyVolumeToAudio).
+    if(!muteEnabled)
     {
-        DebugMsg("BGMDeviceControlsList::MatchControlsListOf: %s BGMDevice mute control.",
-                 hasMute ? "Enabling" : "Disabling");
+        DebugMsg("BGMDeviceControlsList::MatchControlsListOf: Enabling BGMDevice mute control.");
 
-        newEnabledControls.SetBool(kBGMEnabledOutputControlsIndex_Mute, hasMute);
+        newEnabledControls.SetBool(kBGMEnabledOutputControlsIndex_Mute, true);
         deviceUpdated = true;
     }
 
