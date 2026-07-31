@@ -221,12 +221,16 @@ bool    BGMDeviceControlsList::MatchControlsListOf(AudioObjectID inDeviceID)
     newEnabledControls.SetCFMutableArrayFromCopy(enabledControls.GetCFArray());
 
     // Update volume.
-    if(volumeEnabled != hasVolume)
+    //
+    // BGMDevice's volume control always stays enabled, even when the output device has no volume
+    // controls of its own (e.g. HDMI/DisplayPort displays). For those devices, BGMDriver applies
+    // the volume to the audio data itself instead of BGMApp copying the volume to the output
+    // device. See kAudioDeviceCustomPropertyApplyVolumeToAudio.
+    if(!volumeEnabled)
     {
-        DebugMsg("BGMDeviceControlsList::MatchControlsListOf: %s BGMDevice volume control.",
-                 hasVolume ? "Enabling" : "Disabling");
+        DebugMsg("BGMDeviceControlsList::MatchControlsListOf: Enabling BGMDevice volume control.");
 
-        newEnabledControls.SetBool(kBGMEnabledOutputControlsIndex_Volume, hasVolume);
+        newEnabledControls.SetBool(kBGMEnabledOutputControlsIndex_Volume, true);
         deviceUpdated = true;
     }
 
@@ -245,6 +249,14 @@ bool    BGMDeviceControlsList::MatchControlsListOf(AudioObjectID inDeviceID)
         mBGMDevice.SetPropertyData_CFType(kBGMEnabledOutputControlsAddress,
                                           newEnabledControls.GetCFMutableArray());
     }
+
+    // Have BGMDriver apply the volume to the audio data itself when the output device has no
+    // volume controls for BGMApp to copy the volume to.
+    DebugMsg("BGMDeviceControlsList::MatchControlsListOf: %s software volume in BGMDriver.",
+             hasVolume ? "Disabling" : "Enabling");
+
+    mBGMDevice.SetPropertyData_CFType(kBGMApplyVolumeToAudioAddress,
+                                      hasVolume ? kCFBooleanFalse : kCFBooleanTrue);
 
     return deviceUpdated;
 }

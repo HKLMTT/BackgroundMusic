@@ -30,6 +30,9 @@
 #include "CAVolumeCurve.h"
 #include "CAMutex.h"
 
+// STL Includes
+#include <atomic>
+
 
 #pragma clang assume_nonnull begin
 
@@ -158,7 +161,10 @@ private:
     // volume of this control.
     Float32             mAmplitudeGain;
 
-    bool                mWillApplyVolumeToAudio;
+    // Set from non-realtime threads (e.g. when BGMApp toggles
+    // kAudioDeviceCustomPropertyApplyVolumeToAudio) and read on the realtime IO threads, so it has
+    // to be atomic.
+    std::atomic<bool>   mWillApplyVolumeToAudio;
 
 };
 

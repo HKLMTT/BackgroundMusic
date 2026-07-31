@@ -325,9 +325,10 @@ bool	BGM_Device::Device_HasProperty(AudioObjectID inObjectID, pid_t inClientPID,
         case kAudioDeviceCustomPropertyAppVolumes:
         case kAudioDeviceCustomPropertyEnabledOutputControls:
         case kAudioDeviceCustomPropertyDebugLoggingEnabled:
+        case kAudioDeviceCustomPropertyApplyVolumeToAudio:
 			theAnswer = true;
 			break;
-			
+
 		case kAudioDevicePropertyLatency:
 		case kAudioDevicePropertySafetyOffset:
 		case kAudioDevicePropertyPreferredChannelsForStereo:
@@ -373,9 +374,10 @@ bool	BGM_Device::Device_IsPropertySettable(AudioObjectID inObjectID, pid_t inCli
         case kAudioDeviceCustomPropertyAppVolumes:
         case kAudioDeviceCustomPropertyEnabledOutputControls:
         case kAudioDeviceCustomPropertyDebugLoggingEnabled:
+        case kAudioDeviceCustomPropertyApplyVolumeToAudio:
 			theAnswer = true;
 			break;
-		
+
 		default:
 			theAnswer = BGM_AbstractDevice::IsPropertySettable(inObjectID, inClientPID, inAddress);
 			break;
@@ -489,7 +491,11 @@ UInt32	BGM_Device::Device_GetPropertyDataSize(AudioObjectID inObjectID, pid_t in
         case kAudioDeviceCustomPropertyDebugLoggingEnabled:
             theAnswer = sizeof(CFBooleanRef);
             break;
-		
+
+        case kAudioDeviceCustomPropertyApplyVolumeToAudio:
+            theAnswer = sizeof(CFBooleanRef);
+            break;
+
 		default:
 			theAnswer = BGM_AbstractDevice::GetPropertyDataSize(inObjectID, inClientPID, inAddress, inQualifierDataSize, inQualifierData);
 			break;
@@ -890,9 +896,9 @@ void	BGM_Device::Device_GetPropertyData(AudioObjectID inObjectID, pid_t inClient
             theNumberItemsToFetch = inDataSize / sizeof(AudioServerPlugInCustomPropertyInfo);
             
             //	clamp it to the number of items we have
-            if(theNumberItemsToFetch > 7)
+            if(theNumberItemsToFetch > 8)
             {
-                theNumberItemsToFetch = 7;
+                theNumberItemsToFetch = 8;
             }
             
             if(theNumberItemsToFetch > 0)
@@ -936,6 +942,12 @@ void	BGM_Device::Device_GetPropertyData(AudioObjectID inObjectID, pid_t inClient
                 ((AudioServerPlugInCustomPropertyInfo*)outData)[6].mSelector = kAudioDeviceCustomPropertyDebugLoggingEnabled;
                 ((AudioServerPlugInCustomPropertyInfo*)outData)[6].mPropertyDataType = kAudioServerPlugInCustomPropertyDataTypeCFPropertyList;
                 ((AudioServerPlugInCustomPropertyInfo*)outData)[6].mQualifierDataType = kAudioServerPlugInCustomPropertyDataTypeNone;
+            }
+            if(theNumberItemsToFetch > 7)
+            {
+                ((AudioServerPlugInCustomPropertyInfo*)outData)[7].mSelector = kAudioDeviceCustomPropertyApplyVolumeToAudio;
+                ((AudioServerPlugInCustomPropertyInfo*)outData)[7].mPropertyDataType = kAudioServerPlugInCustomPropertyDataTypeCFPropertyList;
+                ((AudioServerPlugInCustomPropertyInfo*)outData)[7].mQualifierDataType = kAudioServerPlugInCustomPropertyDataTypeNone;
             }
 
             outDataSize = theNumberItemsToFetch * sizeof(AudioServerPlugInCustomPropertyInfo);
@@ -981,6 +993,12 @@ void	BGM_Device::Device_GetPropertyData(AudioObjectID inObjectID, pid_t inClient
         case kAudioDeviceCustomPropertyDebugLoggingEnabled:
             ThrowIf(inDataSize < sizeof(CFBooleanRef), CAException(kAudioHardwareBadPropertySizeError), "BGM_Device::Device_GetPropertyData: not enough space for the return value of kAudioDeviceCustomPropertyDebugLoggingEnabled for the device");
             *reinterpret_cast<CFBooleanRef*>(outData) = BGMDebugLoggingIsEnabled() ? kCFBooleanTrue : kCFBooleanFalse;
+            outDataSize = sizeof(CFBooleanRef);
+            break;
+
+        case kAudioDeviceCustomPropertyApplyVolumeToAudio:
+            ThrowIf(inDataSize < sizeof(CFBooleanRef), CAException(kAudioHardwareBadPropertySizeError), "BGM_Device::Device_GetPropertyData: not enough space for the return value of kAudioDeviceCustomPropertyApplyVolumeToAudio for the device");
+            *reinterpret_cast<CFBooleanRef*>(outData) = mVolumeControl.WillApplyVolumeToAudioRT() ? kCFBooleanTrue : kCFBooleanFalse;
             outDataSize = sizeof(CFBooleanRef);
             break;
             
@@ -1279,6 +1297,47 @@ void	BGM_Device::Device_SetPropertyData(AudioObjectID inObjectID, pid_t inClient
                     // Send notification
                     CADispatchQueue::GetGlobalSerialQueue().Dispatch(false,	^{
                         AudioObjectPropertyAddress theChangedProperties[] = { kBGMDebugLoggingEnabledAddress };
+                        BGM_PlugIn::Host_PropertiesChanged(inObjectID, 1, theChangedProperties);
+                    });
+                }
+            }
+            break;
+
+        case kAudioDeviceCustomPropertyApplyVolumeToAudio:
+            {
+                ThrowIf(inDataSize < sizeof(CFBooleanRef),
+                        CAException(kAudioHardwareBadPropertySizeError),
+                        "BGM_Device::Device_SetPropertyData: wrong size for the data for "
+                        "kAudioDeviceCustomPropertyApplyVolumeToAudio");
+
+                CFBooleanRef theApplyVolumeRef = *reinterpret_cast<const CFBooleanRef*>(inData);
+
+                ThrowIfNULL(theApplyVolumeRef,
+                            CAException(kAudioHardwareIllegalOperationError),
+                            "BGM_Device::Device_SetPropertyData: null reference given for "
+                            "kAudioDeviceCustomPropertyApplyVolumeToAudio");
+                ThrowIf(CFGetTypeID(theApplyVolumeRef) != CFBooleanGetTypeID(),
+                        CAException(kAudioHardwareIllegalOperationError),
+                        "BGM_Device::Device_SetPropertyData: CFType given for "
+                        "kAudioDeviceCustomPropertyApplyVolumeToAudio was not a CFBoolean");
+
+                bool theApplyVolume = CFBooleanGetValue(theApplyVolumeRef);
+
+                // mWillApplyVolumeToAudio is atomic because it's read on the IO threads, so there's
+                // nothing to lock around here.
+                bool propertyWasChanged =
+                    (mVolumeControl.WillApplyVolumeToAudioRT() != theApplyVolume);
+
+                mVolumeControl.SetWillApplyVolumeToAudio(theApplyVolume);
+
+                DebugMsg("BGM_Device::Device_SetPropertyData: %s applying volume to audio data",
+                         theApplyVolume ? "Started" : "Stopped");
+
+                if(propertyWasChanged)
+                {
+                    // Send notification
+                    CADispatchQueue::GetGlobalSerialQueue().Dispatch(false,	^{
+                        AudioObjectPropertyAddress theChangedProperties[] = { kBGMApplyVolumeToAudioAddress };
                         BGM_PlugIn::Host_PropertiesChanged(inObjectID, 1, theChangedProperties);
                     });
                 }
